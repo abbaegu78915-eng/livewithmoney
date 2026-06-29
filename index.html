@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📅 台灣行事曆家庭記帳工具</title>
+    <style>
+        :root {
+            --primary: #3498db;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --warning: #f1c40f;
+            --dark: #2c3e50;
+            --light: #f8f9fa;
+        }
+        body {
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            background-color: #f4f6f9;
+            color: var(--dark);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        /* 頁籤切換 */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* 行事曆樣式 */
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+        .weekday {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            background: var(--light);
+        }
+        .day-cell {
+            background: white;
+            border: 1px solid #ddd;
+            min-height: 90px;
+            padding: 5px;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s;
+        }
+        .day-cell:hover { background: #eaf2f8; }
+        .day-cell .num { font-weight: bold; }
+        .day-cell .day-summary {
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        .day-summary .inc { color: var(--success); }
+        .day-summary .exp { color: var(--danger); }
+
+        /* 彈窗樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 450px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .modal-btns {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* 統計頁面樣式 */
+        .stat-filter {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background: var(--light);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            text-align: center;
+            border-top: 4px solid var(--primary);
+        }
+        .card.inc { border-top-color: var(--success); }
+        .card.exp { border-top-color: var(--danger); }
+        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #7f8c8d; }
+        .card p { margin: 0; font-size: 24px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchPage('calendar-page')">📅 行事曆記帳</button>
+        <button class="tab-btn" onclick="switchPage('stats-page')">📊 數據統計</button>
+    </div>
+
+    <div id="calendar-page" class="page active">
+        <div class="calendar-header">
+            <button onclick="changeMonth(-1)">◀ 上個月</button>
+            <h2 id="calendar-title">2026 年 06 月</h2>
+            <button onclick="changeMonth(1)">下個月 ▶</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+
+    <div id="stats-page" class="page">
+        <h2>📊 區間財務統計</h2>
+        <div class="stat-filter">
+            <label>開始日期:</label>
+            <input type="date" id="start-date">
+            <label>結束日期:</label>
+            <input type="date" id="end-date">
+            <button onclick="calculateStats()" style="background: var(--primary); color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">開始統計</button>
+        </div>
+        <div class="stat-cards">
+            <div class="card inc">
+                <h3>總收入</h3>
+                <p style="color: var(--success);">NT$ <span id="stat-income">0</span></p>
+            </div>
+            <div class="card">
+                <h3>總存底</h3>
+                <p style="color: var(--warning);">NT$ <span id="stat-reserve">0</span></p>
+            </div>
+            <div class="card exp">
+                <h3>總支出</h3>
+                <p style="color: var(--danger);">NT$ <span id="stat-expense">0</span></p>
+            </div>
+            <div class="card">
+                <h3>結算總和 (收入 - 存底 - 支出)</h3>
+                <p id="stat-total-text" style="color: var(--dark);">NT$ <span id="stat-total">0</span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="account-modal" class="modal">
+    <div class="modal-content">
+        <h3 id="modal-date-title">日期記帳</h3>
+        <form id="account-form">
+            <div class="form-group">
+                <label>存底 (元)</label>
+                <input type="number" id="input-reserve" value="0">
+            </div>
+            <div class="form-group">
+                <label>收入 (元)</label>
+                <input type="number" id="input-income" value="0">
+            </div>
+            <div class="form-group">
+                <label>支出 (元)</label>
+                <input type="number" id="input-expense" value="0">
+            </div>
+            <div class="form-group">
+                <label>總和 (自動計算)</label>
+                <input type="number" id="input-total" readonly style="background: #eee;" value="0">
+            </div>
+            <div class="form-group">
+                <label>備註</label>
+                <textarea id="input-note" rows="3" placeholder="備註說明..."></textarea>
+            </div>
+            <div class="modal-btns">
+                <button type="button" onclick="closeModal()" style="background:#95a5a6; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">取消</button>
+                <button type="submit" style="background:var(--success); color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">儲存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+<script>
+    // Firebase 配置 (串接您指定的 asia-southeast1 亞洲 Realtime Database)
+    const firebaseConfig = {
+        apiKey: "AIzaSyAkccerCte7jLgXvxw4Nqr03LtLvCgYuzo",
+        authDomain: "livewithmoney.firebaseapp.com",
+        projectId: "livewithmoney",
+        storageBucket: "livewithmoney.firebasestorage.app",
+        messagingSenderId: "31184417124",
+        appId: "1:31184417124:web:54a601540e8d7dbeeb8a71",
+        databaseURL: "https://livewithmoney-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+
+    // 初始化 Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // 核心資料庫路徑變數
+    let financeData = {};
+    let currentDate = new Date(); // 當前行事曆顯示的年月
+    let selectedDateStr = ""; // 當前點選的日期字串 (YYYY-MM-DD)
+
+    const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+
+    // 監聽 Firebase 雲端資料庫更新，一有變動立刻重繪行事曆
+    database.ref('family_finance').on('value', (snapshot) => {
+        financeData = snapshot.val() || {};
+        renderCalendar();
+        
+        // 如果切換在統計頁，即時更新統計數值
+        if (document.getElementById('stats-page').classList.contains('active')) {
+            calculateStats();
+        }
+    });
+
+    // 頁籤切換
+    function switchPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        event.target.classList.add('active');
+
+        if(pageId === 'stats-page') {
+            // 預設統計區本月
+            const y = currentDate.getFullYear();
+            const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+            document.getElementById('start-date').value = `${y}-${m}-01`;
+            document.getElementById('end-date').value = `${y}-${m}-31`; // 簡化處理
+            calculateStats();
+        }
+    }
+
+    // 生成行事曆
+    function renderCalendar() {
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = '';
+
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+
+        document.getElementById('calendar-title').innerText = `${year} 年 ${String(month + 1).padStart(2, '0')} 月`;
+
+        // 1. 放上星期標頭
+        weekdays.forEach(w => {
+            const div = document.createElement('div');
+            div.className = 'weekday';
+            div.innerText = w;
+            grid.appendChild(div);
+        });
+
+        // 2. 計算這個月的第一天是星期幾，以及這個月有幾天
+        const firstDayIndex = new Date(year, month, 1).getDay();
+        const totalDays = new Date(year, month + 1, 0).getDate();
+
+        // 3. 填補上個月的空白格
+        for (let i = 0; i < firstDayIndex; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.className = 'day-cell';
+            emptyCell.style.visibility = 'hidden';
+            grid.appendChild(emptyCell);
+        }
+
+        // 4. 生成日期格子
+        for (let day = 1; day <= totalDays; day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const cell = document.createElement('div');
+            cell.className = 'day-cell';
+            cell.onclick = () => openModal(dateStr);
+
+            const numSpan = document.createElement('div');
+            numSpan.className = 'num';
+            numSpan.innerText = day;
+            cell.appendChild(numSpan);
+
+            // 如果當天有記帳資料，顯示摘要
+            if (financeData[dateStr]) {
+                const data = financeData[dateStr];
+                const summary = document.createElement('div');
+                summary.className = 'day-summary';
+                summary.innerHTML = `
+                    <div class="inc">收:+$${data.income}</div>
+                    <div class="exp">支:-$${data.expense}</div>
+                    <div style="font-weight:bold; color:#2c3e50;">總:${data.total >= 0 ? '+' : ''}$${data.total}</div>
+                `;
+                cell.appendChild(summary);
+            }
+
+            grid.appendChild(cell);
+        }
+    }
+
+    function changeMonth(direction) {
+        currentDate.setMonth(currentDate.getMonth() + direction);
+        renderCalendar();
+    }
+
+    // 彈窗管理
+    const modal = document.getElementById('account-modal');
+    const form = document.getElementById('account-form');
+
+    // 自動計算總和： 收入 - 存底 - 支出
+    function autoCalcTotal() {
+        const reserve = Number(document.getElementById('input-reserve').value) || 0;
+        const income = Number(document.getElementById('input-income').value) || 0;
+        const expense = Number(document.getElementById('input-expense').value) || 0;
+        document.getElementById('input-total').value = income - reserve - expense;
+    }
+
+    // 監聽輸入框變動即時計算
+    ['input-reserve', 'input-income', 'input-expense'].forEach(id => {
+        document.getElementById(id).addEventListener('input', autoCalcTotal);
+    });
+
+    function openModal(dateStr) {
+        selectedDateStr = dateStr;
+        document.getElementById('modal-date-title').innerText = `📅 ${dateStr} 財務記帳`;
+        
+        // 讀取舊資料或帶入預設值
+        const existing = financeData[dateStr] || { reserve: 0, income: 0, expense: 0, total: 0, note: "" };
+        document.getElementById('input-reserve').value = existing.reserve;
+        document.getElementById('input-income').value = existing.income;
+        document.getElementById('input-expense').value = existing.expense;
+        document.getElementById('input-total').value = existing.total;
+        document.getElementById('input-note').value = existing.note;
+
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+
+    // 儲存表單資料直接同步至 Firebase 雲端資料庫路徑下
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const reserve = Number(document.getElementById('input-reserve').value) || 0;
+        const income = Number(document.getElementById('input-income').value) || 0;
+        const expense = Number(document.getElementById('input-expense').value) || 0;
+        const total = income - reserve - expense;
+        const note = document.getElementById('input-note').value;
+
+        if(reserve === 0 && income === 0 && expense === 0 && note.trim() === "") {
+            // 若全部清空為0且無備註，直接自雲端刪除該節點，乾淨不佔空間
+            database.ref(`family_finance/${selectedDateStr}`).remove().then(() => closeModal());
+        } else {
+            // 直接寫入對應的日期節點
+            database.ref(`family_finance/${selectedDateStr}`).set({
+                reserve, income, expense, total, note
+            }).then(() => closeModal());
+        }
+    });
+
+    // 區間統計計算
+    function calculateStats() {
+        const start = document.getElementById('start-date').value;
+        const end = document.getElementById('end-date').value;
+
+        let totalIncome = 0;
+        let totalReserve = 0;
+        let totalExpense = 0;
+
+        if(!start || !end) return;
+
+        // 遍歷所有儲存的日期物件
+        Object.keys(financeData).forEach(dateKey => {
+            if(dateKey >= start && dateKey <= end) {
+                totalIncome += (financeData[dateKey].income || 0);
+                totalReserve += (financeData[dateKey].reserve || 0);
+                totalExpense += (financeData[dateKey].expense || 0);
+            }
+        });
+
+        const grandTotal = totalIncome - totalReserve - totalExpense;
+
+        // 渲染統計數字
+        document.getElementById('stat-income').innerText = totalIncome.toLocaleString();
+        document.getElementById('stat-reserve').innerText = totalReserve.toLocaleString();
+        document.getElementById('stat-expense').innerText = totalExpense.toLocaleString();
+        document.getElementById('stat-total').innerText = grandTotal.toLocaleString();
+
+        // 根據總和正負切換顏色
+        const totalText = document.getElementById('stat-total-text');
+        if(grandTotal < 0) {
+            totalText.style.color = 'var(--danger)';
+        } else {
+            totalText.style.color = 'var(--success)';
+        }
+    }
+</script>
+
+</body>
+</html>
